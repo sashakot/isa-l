@@ -36,7 +36,7 @@
 #include "types.h"
 
 #define TEST_SOURCES 16
-#define TEST_LEN     1024
+#define TEST_LEN     32 //1024
 #define TEST_MEM ((TEST_SOURCES + 2)*(TEST_LEN))
 #ifndef TEST_SEED
 # define TEST_SEED 0x1234
@@ -61,6 +61,160 @@ int dump(unsigned char *buf, int len)
 	}
 	printf("\n");
 	return 0;
+}
+
+
+void raid6_update(void *in[TEST_SOURCES + 2], int j)
+{
+	int k, m, t, i, ret, fail = 0;
+	char new_buff[TEST_LEN];
+	void *update_buffs[TEST_SOURCES + 2];
+	int uraw = 0;
+	char DIFF[TEST_LEN];
+	char PN[TEST_LEN];
+	char QN[TEST_LEN];
+	char TMP[TEST_LEN];
+	char QTMP[TEST_LEN];
+	char zero_buff[TEST_LEN] = {0};
+	void *buffs[TEST_SOURCES + 2];
+
+	m = 2;
+	k = j - m;
+
+	uraw = rand() % k;
+
+	printf("\nUpdate row %d\n\n",uraw);
+
+	// Allocate the arrays
+	for (i = 0; i < TEST_SOURCES + 2; i++) {
+		void *buf;
+		ret = posix_memalign(&buf, 32, TEST_LEN);
+		if (ret) {
+			printf("alloc error: Fail");
+			return 1;
+		}
+		buffs[i] = buf;
+	}
+
+	// Test of all zeros
+	for (i = 0; i < TEST_SOURCES + 2; i++)
+		memcpy(buffs[i], in[i], TEST_LEN);
+
+	printf("Input buffers: \n");
+	for (t = 0; t < j; t++) {
+		printf("%d ", t);
+		dump(buffs[t], 15);
+	}
+	printf("\n");
+
+	rand_buffer(new_buff, TEST_LEN);
+	printf("New buffer: \n");
+	printf("%d ", 0);
+	dump(new_buff, 15);
+	printf("\n");
+
+	memset(update_buffs, 0, sizeof(update_buffs));
+
+	update_buffs[0] = buffs[uraw];
+	update_buffs[1] = new_buff;
+	update_buffs[2] = DIFF;
+
+	ret = xor_gen(3, TEST_LEN, update_buffs);
+
+	printf("XOR between old and new data:\n");
+
+	for (t = 0; t < 3; t++) {
+		printf("%d ", t);
+		dump(update_buffs[t], 15);
+	}
+	printf("\n");
+
+	memset(update_buffs, 0, sizeof(update_buffs));
+	update_buffs[0] = buffs[j -2];
+	update_buffs[1] = DIFF;
+	update_buffs[2] = PN;
+
+	ret = xor_gen(3, TEST_LEN, update_buffs);
+
+	printf("New P block:\n");
+
+	for (t = 0; t < 3; t++) {
+		printf("%d ", t);
+		dump(update_buffs[t], 15);
+	}
+	printf("\n");
+
+	for (i = 0; i < k; i++) {
+		if (i != uraw) {
+			update_buffs[i] = zero_buff;
+		} else {
+			update_buffs[i] = DIFF;
+			buffs[i] = new_buff;
+		}
+	}
+
+	update_buffs[k] = TMP;
+	update_buffs[k + 1 ] = QTMP;
+
+	pq_gen(j, TEST_LEN, update_buffs);
+
+	printf("QTMP generation:\n");
+
+	for (t = 0; t < j; t++) {
+		printf("%d ", t);
+		dump(update_buffs[t], 15);
+	}
+	printf("\n");
+
+	memset(update_buffs, 0, sizeof(update_buffs));
+	update_buffs[0] = buffs[j -1];
+	update_buffs[1] = QTMP;
+	update_buffs[2] = QN;
+
+	ret = xor_gen(3, TEST_LEN, update_buffs);
+
+	printf("QN buffers:\n");
+
+	for (t = 0; t < 3; t++) {
+		printf("%d ", t);
+		dump(update_buffs[t], 15);
+	}
+	printf("\n");
+
+
+	ret = pq_gen(j, TEST_LEN, buffs);
+	fail |= pq_check_base(j, TEST_LEN, buffs);
+
+	if (fail > 0) {
+		printf("FULL fail rand test %d sources\n", j);
+		return 1;
+	} else
+		putchar('.');
+
+	fail = memcmp(buffs[j - 2], PN, TEST_LEN);
+	if (fail > 0) {
+		printf("FULL PN\n", j);
+		return 1;
+	} else
+		putchar('.');
+
+	fail = memcmp(buffs[j - 1], QN, TEST_LEN);
+	if (fail > 0) {
+		printf("FULL QN\n", j);
+		return 1;
+	} else
+		putchar('.');
+
+	printf("Results comparison:\n");
+	for (t = 2; t > 0; t--) {
+		printf("%d ", j - t);
+		if (t == 2)
+			dump(PN, 15);
+		else
+			dump(QN, 15);
+		printf("%d ", j - t);
+		dump(buffs[j - t], 15);
+	}
 }
 
 int main(int argc, char *argv[])
@@ -134,6 +288,7 @@ int main(int argc, char *argv[])
 			rand_buffer(buffs[i], TEST_LEN);
 
 		pq_gen(j, TEST_LEN, buffs);
+
 		fail |= pq_check_base(j, TEST_LEN, buffs);
 
 		if (fail > 0) {
@@ -141,6 +296,8 @@ int main(int argc, char *argv[])
 			return 1;
 		} else
 			putchar('.');
+
+		raid6_update(buffs, j);
 	}
 
 	fflush(0);

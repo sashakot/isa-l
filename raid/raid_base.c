@@ -62,7 +62,49 @@ int pq_gen_base(int vects, int len, void **array)
 	}
 	return 0;
 }
+/*
+int pq_update_base(int vects, int len,
+	        const void  *old_d,
+		void *new_d,
+		const void *old_p,
+		void *new_p,
+		const void *old_q,
+		void *new_q);
+{
+	int i, j;
+	unsigned long p, q, s, diff, old;
+	unsigned long **src = (unsigned long **)array;
+	unsigned long *old_d_src = (unsigned long *)old_d;
+	unsigned long *new_d_src = (unsigned long *)new_d;
+	unsigned long *old_p_src = (unsigned long *)old_p;
+	unsigned long *old_q_src = (unsigned long *)old_q;
+	unsigned long *new_p_src = (unsigned long *)new_p;
+	unsigned long *new_q_src = (unsigned long *)new_q;
+	int blocks = len / sizeof(long);
 
+	for (i = 0; i < blocks; i++) {
+		d= old_d[i];
+		dn = new_d[i];
+
+		diff = d ^ dn;
+
+		new_p_src[i] = old_p_src[i] ^ diff;
+
+	//	q = p = src[vects - 3][i];
+
+		for (j = vects - 4; j >= 0; j--) {
+			p ^= s = src[j][i];
+			q = s ^ (((q << 1) & notbit0) ^	// shift each byte
+				 ((((q & bit7) << 1) - ((q & bit7) >> 7))	// mask out bytes
+				  & gf8poly));	// apply poly
+		}
+
+		src[vects - 2][i] = p;	// second to last pointer is p
+		src[vects - 1][i] = q;	// last pointer is q
+	}
+	return 0;
+}
+*/
 int pq_check_base(int vects, int len, void **array)
 {
 	int i, j;
